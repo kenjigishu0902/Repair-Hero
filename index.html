@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>Repair Hero - フェニちゃんアクション</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="loading-screen">
+      <div id="loading-box">
+        <div id="loading-title">Repair Hero</div>
+        <div id="loading-text">フェニちゃんを読み込み中...</div>
+        <div id="loading-bar-outer"><div id="loading-bar-inner"></div></div>
+      </div>
+    </div>
+
+    <div id="error-banner"></div>
+
+    <!-- Touch controls (shown only on touch devices via JS) -->
+    <div id="touch-controls">
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <div id="joystick-knob"></div>
+        </div>
+      </div>
+      <button id="jump-button" aria-label="ジャンプ">JUMP</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

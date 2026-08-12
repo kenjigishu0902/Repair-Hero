@@ -1,0 +1,193 @@
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#game-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+}
+
+/* ---------- Loading screen ---------- */
+#loading-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1b2a4a 0%, #0b1120 100%);
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+
+#loading-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#loading-box {
+  text-align: center;
+  color: #fff;
+  padding: 24px 36px;
+  width: min(80vw, 360px);
+}
+
+#loading-title {
+  font-size: clamp(22px, 6vw, 34px);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+  color: #ffd54a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+#loading-text {
+  font-size: clamp(13px, 3.4vw, 16px);
+  opacity: 0.85;
+  margin-bottom: 18px;
+}
+
+#loading-bar-outer {
+  width: 100%;
+  height: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+#loading-bar-inner {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+  transition: width 0.2s ease;
+}
+
+/* ---------- Error banner ---------- */
+#error-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: none;
+  background: rgba(190, 30, 30, 0.92);
+  color: #fff;
+  font-size: clamp(12px, 3vw, 14px);
+  padding: 10px 14px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+#error-banner.visible {
+  display: block;
+}
+
+/* ---------- Touch controls ---------- */
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  pointer-events: none;
+}
+
+body.touch-enabled #touch-controls {
+  display: block;
+}
+
+#joystick-zone {
+  position: absolute;
+  left: max(20px, 3vw);
+  bottom: max(20px, 4vh);
+  width: clamp(110px, 32vmin, 170px);
+  height: clamp(110px, 32vmin, 170px);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#joystick-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(2px);
+}
+
+#joystick-knob {
+  position: absolute;
+  width: 42%;
+  height: 42%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: background 0.1s ease;
+}
+
+#jump-button {
+  position: absolute;
+  right: max(24px, 4vw);
+  bottom: max(30px, 6vh);
+  width: clamp(72px, 20vmin, 100px);
+  height: clamp(72px, 20vmin, 100px);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 170, 40, 0.55);
+  color: #fff;
+  font-weight: 700;
+  font-size: clamp(13px, 3.2vmin, 16px);
+  letter-spacing: 0.05em;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#jump-button:active,
+#jump-button.pressed {
+  background: rgba(255, 170, 40, 0.85);
+  transform: scale(0.95);
+}
+
+/* Landscape / small height adjustment */
+@media (max-height: 420px) {
+  #joystick-zone {
+    width: clamp(90px, 26vmin, 130px);
+    height: clamp(90px, 26vmin, 130px);
+  }
+  #jump-button {
+    width: clamp(60px, 16vmin, 84px);
+    height: clamp(60px, 16vmin, 84px);
+  }
+}
