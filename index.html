@@ -1,35 +1,126 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>Repair Hero - フェニちゃんアクション</title>
-<link rel="stylesheet" href="css/style.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1526" />
+  <meta name="description" content="フェニちゃんがバグの侵食からリペアワールドを救う3Dアクションゲーム、Repair Hero。" />
+  <title>Repair Hero - フェニちゃん3Dアクション</title>
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div id="game-container">
-    <canvas id="game-canvas"></canvas>
+  <main id="game-container">
+    <canvas id="game-canvas" aria-label="Repair Hero 3Dゲーム画面"></canvas>
+    <div id="screen-vignette" aria-hidden="true"></div>
+    <div id="damage-flash" aria-hidden="true"></div>
 
-    <div id="loading-screen">
-      <div id="loading-box">
-        <div id="loading-title">Repair Hero</div>
-        <div id="loading-text">フェニちゃんを読み込み中...</div>
-        <div id="loading-bar-outer"><div id="loading-bar-inner"></div></div>
+    <section id="loading-screen" class="screen-layer" aria-live="polite">
+      <div class="loading-emblem" aria-hidden="true">
+        <span></span><span></span><span></span>
       </div>
-    </div>
+      <div id="loading-title">REPAIR HERO</div>
+      <div id="loading-text">フェニちゃんを読み込み中…</div>
+      <div id="loading-bar-outer"><div id="loading-bar-inner"></div></div>
+      <p class="loading-note">3D MISSION SYSTEM</p>
+    </section>
 
-    <div id="error-banner"></div>
+    <section id="title-screen" class="screen-layer title-layer">
+      <div class="title-panel">
+        <p class="eyebrow">IBRING GAME PROJECT</p>
+        <h1><span>REPAIR</span> HERO</h1>
+        <p class="title-copy">バグに侵食されたリペアワールドを、フェニちゃんの力で修復せよ。</p>
 
-    <!-- Touch controls (shown only on touch devices via JS) -->
-    <div id="touch-controls">
-      <div id="joystick-zone">
-        <div id="joystick-base">
-          <div id="joystick-knob"></div>
+        <div class="mission-card">
+          <div class="mission-number">STAGE 01</div>
+          <div>
+            <strong>侵食されたリペアグリッド</strong>
+            <span>コアを5個回収し、ダークバグ・ガーディアンを撃破する</span>
+          </div>
+        </div>
+
+        <button id="start-button" class="primary-button" type="button" disabled>
+          LOADING…
+        </button>
+
+        <div class="desktop-controls" aria-label="操作説明">
+          <span><b>WASD / 矢印</b> 移動</span>
+          <span><b>SPACE</b> ジャンプ</span>
+          <span><b>J / X</b> 攻撃</span>
+          <span><b>K / SHIFT</b> ダッシュ</span>
+        </div>
+        <p class="touch-copy">スマホは画面のスティックとボタンで操作できます</p>
+      </div>
+    </section>
+
+    <section id="hud" aria-label="ゲーム情報">
+      <div class="hud-top-row">
+        <div class="health-panel hud-panel">
+          <div class="hud-label"><span>FENI HP</span><b id="health-text">100 / 100</b></div>
+          <div class="bar-shell"><div id="health-bar-fill" class="health-fill"></div></div>
+        </div>
+
+        <div class="status-cluster">
+          <div class="status-chip hud-panel">
+            <span class="chip-icon core-icon">◆</span>
+            <div><small>REPAIR CORE</small><b id="core-count">0 / 5</b></div>
+          </div>
+          <div class="status-chip hud-panel">
+            <span class="chip-icon enemy-icon">!</span>
+            <div><small>BUGS</small><b id="enemy-count">6</b></div>
+          </div>
+          <div class="status-chip timer-chip hud-panel">
+            <div><small>TIME</small><b id="timer-text">00:00</b></div>
+          </div>
         </div>
       </div>
-      <button id="jump-button" aria-label="ジャンプ">JUMP</button>
-    </div>
-  </div>
+
+      <div id="objective-pill"><span>MISSION</span><b id="objective-text">リペアコアを集めろ　0/5</b></div>
+
+      <div id="boss-hud">
+        <div class="boss-heading"><span id="boss-name">DARK BUG GUARDIAN</span><small>BOSS</small></div>
+        <div class="boss-bar-shell"><div id="boss-bar-fill"></div></div>
+      </div>
+
+      <div class="keyboard-hint">J：攻撃　SPACE：ジャンプ　SHIFT：ダッシュ</div>
+    </section>
+
+    <div id="objective-toast" role="status">リペアコアを5個集めろ！</div>
+
+    <section id="touch-controls" aria-label="タッチ操作">
+      <div id="joystick-zone" aria-label="移動スティック">
+        <div id="joystick-base"><div id="joystick-knob"></div></div>
+      </div>
+      <div class="touch-action-cluster">
+        <button id="dash-button" class="touch-button dash-button" type="button" aria-label="ダッシュ">DASH</button>
+        <button id="attack-button" class="touch-button attack-button" type="button" aria-label="攻撃">ATTACK</button>
+        <button id="jump-button" class="touch-button jump-button" type="button" aria-label="ジャンプ">JUMP</button>
+      </div>
+    </section>
+
+    <section id="game-over-screen" class="result-layer screen-layer">
+      <div class="result-card danger-result">
+        <p class="eyebrow">SYSTEM DOWN</p>
+        <h2>MISSION FAILED</h2>
+        <p>侵食エネルギーに倒されてしまった…<br />敵の予備動作を見て、攻撃を避けよう。</p>
+        <button id="retry-button" class="primary-button" type="button">RETRY</button>
+      </div>
+    </section>
+
+    <section id="clear-screen" class="result-layer screen-layer">
+      <div class="result-card clear-result">
+        <p class="eyebrow">REPAIR COMPLETE</p>
+        <h2>STAGE CLEAR!</h2>
+        <p>リペアグリッドの侵食を浄化した！</p>
+        <div class="result-stats">
+          <div><small>CLEAR TIME</small><b id="clear-time">00:00</b></div>
+          <div><small>BUGS DEFEATED</small><b id="clear-defeated">0</b></div>
+        </div>
+        <button id="replay-button" class="primary-button" type="button">PLAY AGAIN</button>
+      </div>
+    </section>
+
+    <div id="error-banner" role="alert"></div>
+  </main>
 
   <script type="module" src="js/main.js"></script>
 </body>
