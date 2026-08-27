@@ -17,11 +17,19 @@ const CONFIG = Object.freeze({
   groundY: 0,
   gravity: -21,
   jumpSpeed: 7.2,
+  doubleJumpSpeed: 6.8,
+  maxJumps: 2,
   walkSpeed: 2.75,
   runSpeed: 5.2,
   dashSpeed: 11.5,
   dashDuration: 0.2,
   dashCooldown: 1.05,
+  rollSpeed: 8.7,
+  rollDuration: 0.46,
+  rollCooldown: 0.68,
+  heavyDuration: 0.72,
+  heavyCooldown: 1.05,
+  specialDuration: 1.72,
   turnSpeed: 15,
   playerRadius: 0.48,
   playerMaxHealth: 100,
@@ -68,6 +76,15 @@ const dom = {
   jumpButton: document.getElementById('jump-button'),
   attackButton: document.getElementById('attack-button'),
   dashButton: document.getElementById('dash-button'),
+  rollButton: document.getElementById('roll-button'),
+  heavyButton: document.getElementById('heavy-button'),
+  specialButton: document.getElementById('special-button'),
+  cameraButton: document.getElementById('camera-button'),
+  cameraTouchButton: document.getElementById('camera-touch-button'),
+  specialGauge: document.getElementById('special-gauge'),
+  specialFill: document.getElementById('special-fill'),
+  specialText: document.getElementById('special-text'),
+  specialCutIn: document.getElementById('special-cut-in'),
 };
 
 function showFatalError(message) {
@@ -185,34 +202,24 @@ function createFloorTexture() {
   canvas.height = 256;
   const context = canvas.getContext('2d');
   const gradient = context.createLinearGradient(0, 0, 256, 256);
-  gradient.addColorStop(0, '#2e6d54');
-  gradient.addColorStop(1, '#245844');
+  gradient.addColorStop(0, '#4f8a48');
+  gradient.addColorStop(0.48, '#3e743d');
+  gradient.addColorStop(1, '#285b38');
   context.fillStyle = gradient;
   context.fillRect(0, 0, 256, 256);
-  context.strokeStyle = 'rgba(155, 236, 196, 0.15)';
-  context.lineWidth = 3;
-  for (let value = 0; value <= 256; value += 64) {
+  for (let index = 0; index < 280; index += 1) {
+    const x = (index * 73) % 256;
+    const y = (index * 149) % 256;
+    const radius = 1 + (index % 4);
+    context.fillStyle = index % 5 === 0 ? 'rgba(220, 231, 128, 0.14)' : 'rgba(19, 74, 42, 0.16)';
     context.beginPath();
-    context.moveTo(value, 0);
-    context.lineTo(value, 256);
-    context.stroke();
-    context.beginPath();
-    context.moveTo(0, value);
-    context.lineTo(256, value);
-    context.stroke();
-  }
-  for (let y = 32; y < 256; y += 64) {
-    for (let x = 32; x < 256; x += 64) {
-      context.fillStyle = 'rgba(235, 255, 188, 0.08)';
-      context.beginPath();
-      context.arc(x, y, 6, 0, Math.PI * 2);
-      context.fill();
-    }
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fill();
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(8, 24);
+  texture.repeat.set(15, 28);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   return texture;
@@ -223,7 +230,7 @@ stageGroup.name = 'Repair Grid Stage';
 scene.add(stageGroup);
 
 const ground = new THREE.Mesh(
-  new THREE.BoxGeometry(31, 0.38, 84),
+  new THREE.BoxGeometry(72, 0.38, 92),
   new THREE.MeshStandardMaterial({
     map: createFloorTexture(),
     color: 0xffffff,
@@ -235,10 +242,24 @@ ground.position.set(0, -0.2, -32.5);
 ground.receiveShadow = true;
 stageGroup.add(ground);
 
+const trailMaterial = new THREE.MeshStandardMaterial({
+  color: 0xb38b58,
+  roughness: 1,
+  metalness: 0,
+});
+for (let index = 0; index < 14; index += 1) {
+  const trail = new THREE.Mesh(new THREE.PlaneGeometry(8.5 + (index % 3) * 0.55, 6.5), trailMaterial);
+  trail.rotation.x = -Math.PI / 2;
+  trail.rotation.z = Math.sin(index * 0.9) * 0.055;
+  trail.position.set(Math.sin(index * 0.78) * 1.35, 0.012, 5 - index * 5.75);
+  trail.receiveShadow = true;
+  stageGroup.add(trail);
+}
+
 const obstacleMaterial = new THREE.MeshStandardMaterial({
-  color: 0x3f5362,
-  roughness: 0.45,
-  metalness: 0.62,
+  color: 0x53665a,
+  roughness: 0.92,
+  metalness: 0.08,
 });
 const obstacleAccent = new THREE.MeshStandardMaterial({
   color: 0x43e6f1,
@@ -275,23 +296,29 @@ addObstacle(-5.4, -41.2, 2.7, 1.05, 1.7);
 addObstacle(5.3, -48.2, 2.9, 0.75, 1.55);
 
 function addBoundaryRails() {
-  const railMaterial = new THREE.MeshStandardMaterial({
-    color: 0x163b4a,
-    emissive: 0x0a7184,
-    emissiveIntensity: 0.72,
-    roughness: 0.38,
-    metalness: 0.7,
-  });
+  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x5b3a25, roughness: 1 });
+  const leafMaterials = [
+    new THREE.MeshStandardMaterial({ color: 0x245d35, roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ color: 0x3c7b3c, roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ color: 0x5b8f3f, roughness: 0.95 }),
+  ];
+  const trunkGeometry = new THREE.CylinderGeometry(0.22, 0.34, 2.8, 7);
+  const crownGeometry = new THREE.ConeGeometry(1.25, 3.6, 8);
   for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.42, 84), railMaterial);
-    rail.position.set(side * 15.32, 0.18, -32.5);
-    rail.castShadow = true;
-    stageGroup.add(rail);
-    for (let z = 6; z >= -72; z -= 5.5) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.46, 1.8, 0.46), obstacleMaterial);
-      post.position.set(side * 15.32, 0.75, z);
-      post.castShadow = true;
-      stageGroup.add(post);
+    for (let index = 0; index < 18; index += 1) {
+      const tree = new THREE.Group();
+      const spread = 16.2 + (index % 4) * 1.7;
+      tree.position.set(side * spread, 0, 6 - index * 4.65);
+      const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+      trunk.position.y = 1.4;
+      trunk.castShadow = true;
+      tree.add(trunk);
+      const crown = new THREE.Mesh(crownGeometry, leafMaterials[index % leafMaterials.length]);
+      crown.position.y = 4.15;
+      crown.scale.set(1 + (index % 3) * 0.16, 0.92 + (index % 2) * 0.16, 1 + (index % 4) * 0.08);
+      crown.castShadow = !isTouchDevice || index % 2 === 0;
+      tree.add(crown);
+      stageGroup.add(tree);
     }
   }
 }
@@ -337,6 +364,64 @@ function addScenery() {
     rock.receiveShadow = true;
     stageGroup.add(rock);
   }
+
+  const hillGeometry = new THREE.ConeGeometry(8, 13, 9);
+  const hillMaterials = [
+    new THREE.MeshStandardMaterial({ color: 0x315f43, roughness: 1 }),
+    new THREE.MeshStandardMaterial({ color: 0x416f46, roughness: 1 }),
+  ];
+  for (let index = 0; index < 12; index += 1) {
+    const side = index % 2 === 0 ? -1 : 1;
+    const hill = new THREE.Mesh(hillGeometry, hillMaterials[index % 2]);
+    hill.position.set(side * (29 + (index % 3) * 7), 3.2, 12 - index * 8.4);
+    hill.scale.set(1 + (index % 4) * 0.22, 0.65 + (index % 3) * 0.16, 1.2);
+    hill.rotation.y = index * 0.77;
+    hill.receiveShadow = true;
+    stageGroup.add(hill);
+  }
+
+  const bushGeometry = new THREE.IcosahedronGeometry(0.7, 1);
+  const bushMaterials = [
+    new THREE.MeshStandardMaterial({ color: 0x2f793f, roughness: 1 }),
+    new THREE.MeshStandardMaterial({ color: 0x4e8a43, roughness: 1 }),
+  ];
+  for (let index = 0; index < 38; index += 1) {
+    const side = index % 2 === 0 ? -1 : 1;
+    const bush = new THREE.Mesh(bushGeometry, bushMaterials[index % 2]);
+    bush.position.set(side * (8.8 + (index % 5) * 1.25), 0.42, 6 - index * 2.12);
+    bush.scale.set(1 + (index % 3) * 0.22, 0.66 + (index % 4) * 0.08, 0.85);
+    bush.rotation.y = index * 1.31;
+    bush.castShadow = !isTouchDevice || index % 3 === 0;
+    stageGroup.add(bush);
+  }
+
+  const water = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.4, 90),
+    new THREE.MeshStandardMaterial({
+      color: 0x42b8d0,
+      emissive: 0x0d536b,
+      emissiveIntensity: 0.28,
+      transparent: true,
+      opacity: 0.72,
+      roughness: 0.22,
+      metalness: 0.08,
+    }),
+  );
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(-25.5, 0.025, -32.5);
+  stageGroup.add(water);
+
+  const flowerGeometry = new THREE.SphereGeometry(0.075, 6, 5);
+  const flowerMaterials = [0xffe56a, 0xff7d9d, 0xd7a3ff, 0xffffff].map((color) => (
+    new THREE.MeshBasicMaterial({ color, toneMapped: false })
+  ));
+  for (let index = 0; index < 54; index += 1) {
+    const flower = new THREE.Mesh(flowerGeometry, flowerMaterials[index % flowerMaterials.length]);
+    const side = index % 2 === 0 ? -1 : 1;
+    flower.position.set(side * (6.4 + (index % 7) * 1.05), 0.12, 5 - index * 1.47);
+    flower.scale.setScalar(0.8 + (index % 3) * 0.25);
+    stageGroup.add(flower);
+  }
 }
 addScenery();
 
@@ -346,6 +431,10 @@ class InputController {
     this.jumpQueued = false;
     this.attackQueued = false;
     this.dashQueued = false;
+    this.rollQueued = false;
+    this.heavyQueued = false;
+    this.specialQueued = false;
+    this.cameraQueued = false;
     this.joystick = { x: 0, y: 0, strength: 0, active: false, pointerId: null };
     this.bindKeyboard();
     this.bindTouch();
@@ -355,13 +444,18 @@ class InputController {
     const blockedCodes = new Set([
       'KeyW', 'KeyA', 'KeyS', 'KeyD',
       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-      'Space', 'KeyJ', 'KeyK', 'ShiftLeft', 'ShiftRight',
+      'Space', 'KeyJ', 'KeyK', 'KeyF', 'KeyR', 'KeyL', 'KeyC', 'KeyV', 'KeyQ', 'KeyE',
+      'ShiftLeft', 'ShiftRight',
     ]);
     window.addEventListener('keydown', (event) => {
       if (blockedCodes.has(event.code)) event.preventDefault();
       if (event.code === 'Space' && !event.repeat) this.jumpQueued = true;
       if ((event.code === 'KeyJ' || event.code === 'KeyX') && !event.repeat) this.attackQueued = true;
       if ((event.code === 'KeyK' || event.code.startsWith('Shift')) && !event.repeat) this.dashQueued = true;
+      if ((event.code === 'KeyL' || event.code === 'KeyC') && !event.repeat) this.rollQueued = true;
+      if (event.code === 'KeyF' && !event.repeat) this.heavyQueued = true;
+      if (event.code === 'KeyR' && !event.repeat) this.specialQueued = true;
+      if (event.code === 'KeyV' && !event.repeat) this.cameraQueued = true;
       this.keys.add(event.code);
     });
     window.addEventListener('keyup', (event) => this.keys.delete(event.code));
@@ -417,6 +511,11 @@ class InputController {
     this.bindActionButton(dom.jumpButton, () => { this.jumpQueued = true; });
     this.bindActionButton(dom.attackButton, () => { this.attackQueued = true; });
     this.bindActionButton(dom.dashButton, () => { this.dashQueued = true; });
+    this.bindActionButton(dom.rollButton, () => { this.rollQueued = true; });
+    this.bindActionButton(dom.heavyButton, () => { this.heavyQueued = true; });
+    this.bindActionButton(dom.specialButton, () => { this.specialQueued = true; });
+    this.bindActionButton(dom.cameraTouchButton, () => { this.cameraQueued = true; });
+    dom.cameraButton?.addEventListener('click', () => { this.cameraQueued = true; });
   }
 
   bindActionButton(button, callback) {
@@ -469,11 +568,43 @@ class InputController {
     return value;
   }
 
+  consumeRoll() {
+    const value = this.rollQueued;
+    this.rollQueued = false;
+    return value;
+  }
+
+  consumeHeavy() {
+    const value = this.heavyQueued;
+    this.heavyQueued = false;
+    return value;
+  }
+
+  consumeSpecial() {
+    const value = this.specialQueued;
+    this.specialQueued = false;
+    return value;
+  }
+
+  consumeCamera() {
+    const value = this.cameraQueued;
+    this.cameraQueued = false;
+    return value;
+  }
+
+  getCameraTurn() {
+    return (this.keys.has('KeyE') ? 1 : 0) - (this.keys.has('KeyQ') ? 1 : 0);
+  }
+
   reset() {
     this.keys.clear();
     this.jumpQueued = false;
     this.attackQueued = false;
     this.dashQueued = false;
+    this.rollQueued = false;
+    this.heavyQueued = false;
+    this.specialQueued = false;
+    this.cameraQueued = false;
     this.joystick.x = 0;
     this.joystick.y = 0;
     this.joystick.strength = 0;
@@ -522,8 +653,23 @@ class GameAudio {
 
   play(name) {
     if (name === 'jump') this.tone(250, 0.16, { slide: 330, type: 'triangle' });
+    if (name === 'doubleJump') {
+      this.tone(310, 0.14, { slide: 520, type: 'triangle', volume: 0.28 });
+      this.tone(620, 0.18, { slide: 240, type: 'sine', delay: 0.06, volume: 0.18 });
+    }
     if (name === 'dash') this.tone(190, 0.12, { slide: 680, type: 'sawtooth', volume: 0.22 });
+    if (name === 'roll') this.tone(145, 0.22, { slide: 240, type: 'triangle', volume: 0.2 });
     if (name === 'attack') this.tone(460, 0.11, { slide: -280, type: 'sawtooth', volume: 0.22 });
+    if (name === 'heavy') {
+      this.tone(110, 0.24, { slide: -45, type: 'square', volume: 0.28 });
+      this.tone(340, 0.16, { slide: -210, type: 'sawtooth', delay: 0.08, volume: 0.2 });
+    }
+    if (name === 'special') {
+      this.tone(74, 0.65, { slide: 240, type: 'sawtooth', volume: 0.32 });
+      [220, 330, 510, 760].forEach((frequency, index) => {
+        this.tone(frequency, 0.24, { slide: 150, type: 'square', delay: 0.12 + index * 0.085, volume: 0.18 });
+      });
+    }
     if (name === 'hit') this.tone(125, 0.12, { slide: -55, type: 'square', volume: 0.25 });
     if (name === 'hurt') this.tone(92, 0.26, { slide: -40, type: 'sawtooth', volume: 0.3 });
     if (name === 'core') {
@@ -669,6 +815,35 @@ function spawnShockwave(position, color = 0xff214f, scale = 1) {
   temporaryEffects.push({ mesh, life: 0.42, maxLife: 0.42, type: 'wave' });
 }
 
+function spawnCrimsonBurst(position) {
+  spawnShockwave(position, 0xff092f, 2.25);
+  spawnShockwave(position, 0xff7a3d, 1.25);
+  for (let index = 0; index < 4; index += 1) {
+    const geometry = new THREE.TorusGeometry(1.45 + index * 0.32, 0.085, 7, 38, Math.PI * 1.45);
+    const material = new THREE.MeshBasicMaterial({
+      color: index % 2 === 0 ? 0xff153d : 0xffa044,
+      transparent: true,
+      opacity: 0.92,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    mesh.position.y += 0.72 + index * 0.16;
+    mesh.rotation.set(index * 0.62, index * 0.83, index * 1.13);
+    mesh.scale.setScalar(0.34);
+    scene.add(mesh);
+    temporaryEffects.push({ mesh, life: 0.78, maxLife: 0.78, type: 'crimson', spin: index % 2 === 0 ? 1 : -1 });
+  }
+  particles.burst(position.clone().add(new THREE.Vector3(0, 0.75, 0)), 0xff153d, isTouchDevice ? 48 : 78, 7.2, {
+    upward: 4.2,
+    gravity: 6.5,
+    life: 1.05,
+  });
+}
+
 function updateTemporaryEffects(delta) {
   for (let index = temporaryEffects.length - 1; index >= 0; index -= 1) {
     const effect = temporaryEffects[index];
@@ -677,6 +852,10 @@ function updateTemporaryEffects(delta) {
     if (effect.type === 'slash') {
       effect.mesh.scale.setScalar(0.7 + progress * 0.62);
       effect.mesh.rotation.z += delta * 2.1;
+    } else if (effect.type === 'crimson') {
+      effect.mesh.scale.setScalar(0.34 + progress * 1.32);
+      effect.mesh.rotation.x += delta * 3.4 * effect.spin;
+      effect.mesh.rotation.y += delta * 4.8 * effect.spin;
     } else {
       effect.mesh.scale.multiplyScalar(1 + delta * 5.4);
     }
@@ -795,7 +974,7 @@ class FeniAnimator {
     bone.scale.lerp(this.targetScale, blend);
   }
 
-  update(delta, state, moveAmount, verticalVelocity, attackProgress, comboStep, landedPulse) {
+  update(delta, state, moveAmount, verticalVelocity, attackProgress, comboStep, landedPulse, expression = 'neutral', actionProgress = 0) {
     this.elapsed += delta;
     const moving = state === 'walk' || state === 'run';
     const gaitSpeed = state === 'run' ? 11.5 : 7.4;
@@ -816,6 +995,7 @@ class FeniAnimator {
     let tailSway = Math.sin(this.elapsed * 2.1) * 0.055;
     let headYaw = Math.sin(this.elapsed * 0.72) * 0.035;
     let headPitch = Math.sin(this.elapsed * 1.35) * 0.018;
+    let shoulderDrop = 0.28;
 
     if (state === 'idle') {
       const breath = Math.sin(this.elapsed * 2.25);
@@ -823,6 +1003,20 @@ class FeniAnimator {
       tailSway = Math.sin(this.elapsed * 1.45) * 0.1;
       headYaw = Math.sin(this.elapsed * 0.58) * 0.075;
       headPitch = Math.sin(this.elapsed * 0.91) * 0.025;
+      shoulderDrop = 0.48;
+      if (expression === 'curious') {
+        headYaw += Math.sin(this.elapsed * 1.1) * 0.16;
+        headPitch -= 0.075;
+        chestTwist = Math.sin(this.elapsed * 0.8) * 0.04;
+      } else if (expression === 'cheerful') {
+        bodyBob += Math.abs(Math.sin(this.elapsed * 3.4)) * 0.018;
+        headPitch -= 0.04;
+        tailSway *= 1.55;
+      } else if (expression === 'worried') {
+        headPitch += 0.09;
+        headYaw *= 0.45;
+        shoulderDrop = 0.36;
+      }
     } else if (moving) {
       const runFactor = state === 'run' ? 1 : 0.62;
       bodyBob = step * 0.042 * runFactor;
@@ -852,6 +1046,31 @@ class FeniAnimator {
       armSwing = -0.48;
       tailSway = -0.22;
       headPitch = -0.1;
+      shoulderDrop = 0.18;
+    } else if (state === 'roll') {
+      bodyLean = -0.48;
+      bodyBob = -0.08;
+      kneeLeft = 0.86;
+      kneeRight = 0.86;
+      armSwing = -0.62;
+      shoulderDrop = 0.12;
+      headPitch = 0.18;
+    } else if (state === 'heavy') {
+      const wind = Math.sin(Math.min(1, actionProgress) * Math.PI);
+      bodyLean = -0.26 * wind;
+      chestTwist = -0.58 * wind;
+      armSwing = 1.15 * wind;
+      shoulderDrop = 0.16;
+      headPitch = -0.12;
+    } else if (state === 'special') {
+      const power = Math.sin(Math.min(1, actionProgress) * Math.PI);
+      bodyLean = -0.16 * power;
+      bodyBob = power * 0.05;
+      chestTwist = Math.sin(actionProgress * Math.PI * 4) * 0.12;
+      armSwing = -0.92 * power;
+      shoulderDrop = 0.06;
+      tailSway = Math.sin(this.elapsed * 12) * 0.22;
+      headPitch = -0.15;
     }
 
     if (state === 'attack') {
@@ -884,9 +1103,9 @@ class FeniAnimator {
     this.poseBone('Bone_012', [-kneeRight, 0, 0], null, blend);
     this.poseBone('Bone_011', [kneeRight * 0.55 - opposite * 0.12, 0, 0], null, blend);
 
-    this.poseBone('Bone_022', [-opposite * armSwing, -chestTwist * 0.18, tailSway * 0.08], null, blend);
+    this.poseBone('Bone_022', [-opposite * armSwing, -chestTwist * 0.18, shoulderDrop + tailSway * 0.08], null, blend);
     this.poseBone('Bone_021', [Math.max(0, opposite) * armSwing * 0.28, 0, 0], null, blend);
-    this.poseBone('Bone_028', [-swing * armSwing, chestTwist * 0.16, -tailSway * 0.08], null, blend);
+    this.poseBone('Bone_028', [-swing * armSwing, chestTwist * 0.16, -shoulderDrop - tailSway * 0.08], null, blend);
     this.poseBone('Bone_027', [Math.max(0, swing) * armSwing * 0.25, 0, 0], null, blend);
 
     this.poseBone('Bone_031', [0, tailSway, Math.sin(this.elapsed * 2.6) * 0.045], null, blend);
@@ -895,9 +1114,52 @@ class FeniAnimator {
   }
 }
 
+function createFeniExpressionRig() {
+  const group = new THREE.Group();
+  group.name = 'Feni Expression Rig';
+  group.position.set(0.05, 1.2, 0.535);
+  const browMaterial = new THREE.MeshBasicMaterial({ color: 0x2b1111, toneMapped: false });
+  const cheekMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff6b70,
+    transparent: true,
+    opacity: 0,
+    toneMapped: false,
+  });
+  const glintMaterial = new THREE.MeshBasicMaterial({
+    color: 0xfff4b8,
+    transparent: true,
+    opacity: 0.9,
+    toneMapped: false,
+  });
+  const browGeometry = new THREE.BoxGeometry(0.13, 0.025, 0.018);
+  const cheekGeometry = new THREE.SphereGeometry(0.045, 8, 6);
+  const glintGeometry = new THREE.SphereGeometry(0.025, 7, 5);
+  const brows = [];
+  const cheeks = [];
+  const glints = [];
+  for (const side of [-1, 1]) {
+    const brow = new THREE.Mesh(browGeometry, browMaterial);
+    brow.position.set(side * 0.145, 0.11, 0);
+    group.add(brow);
+    brows.push(brow);
+    const cheek = new THREE.Mesh(cheekGeometry, cheekMaterial);
+    cheek.position.set(side * 0.19, -0.055, 0.004);
+    group.add(cheek);
+    cheeks.push(cheek);
+    const glint = new THREE.Mesh(glintGeometry, glintMaterial);
+    glint.position.set(side * 0.128, 0.035, 0.012);
+    group.add(glint);
+    glints.push(glint);
+  }
+  group.userData.parts = { brows, cheeks, glints, cheekMaterial, glintMaterial };
+  return group;
+}
+
 const player = {
   group: new THREE.Group(),
+  visualRoot: new THREE.Group(),
   model: null,
+  expressionRig: createFeniExpressionRig(),
   animator: null,
   ready: false,
   velocity: new THREE.Vector3(),
@@ -906,6 +1168,7 @@ const player = {
   grounded: true,
   coyoteTimer: 0,
   jumpBuffer: 0,
+  jumpsUsed: 0,
   health: CONFIG.playerMaxHealth,
   invulnerability: 0,
   attackTimer: 0,
@@ -915,17 +1178,97 @@ const player = {
   comboWindow: 0,
   dashTimer: 0,
   dashCooldown: 0,
+  rollTimer: 0,
+  rollCooldown: 0,
+  rollDirection: new THREE.Vector3(0, 0, -1),
+  heavyTimer: 0,
+  heavyCooldown: 0,
+  heavyConnected: false,
+  specialTimer: 0,
+  specialConnected: false,
+  specialCharge: 100,
+  expression: 'neutral',
+  expressionTimer: 1.4,
+  blinkTimer: 1.8,
   landedPulse: 0,
   footstepTimer: 0,
   state: 'idle',
 };
 player.group.name = 'Feni Player';
+player.visualRoot.name = 'Feni Visual Root';
+player.visualRoot.add(player.expressionRig);
+player.group.add(player.visualRoot);
 player.group.position.set(0, CONFIG.groundY, 4.2);
 scene.add(player.group);
 
 const tempMove = new THREE.Vector3();
 const tempForward = new THREE.Vector3();
 const tempPosition = new THREE.Vector3();
+
+function updateFeniExpression(delta, state, elapsed) {
+  if (state === 'special' || state === 'heavy' || state === 'attack') {
+    player.expression = 'determined';
+    player.expressionTimer = 0.5;
+  } else if (player.health <= 30) {
+    player.expression = 'worried';
+  } else if (state === 'idle') {
+    player.expressionTimer -= delta;
+    if (player.expressionTimer <= 0) {
+      const idleExpressions = ['neutral', 'curious', 'cheerful', 'curious'];
+      player.expression = idleExpressions[Math.floor(elapsed / 3.2) % idleExpressions.length];
+      player.expressionTimer = 2.6 + (Math.sin(elapsed * 1.73) + 1) * 1.1;
+    }
+  } else if (state === 'run' || state === 'dash' || state === 'roll') {
+    player.expression = 'focused';
+  } else if (player.expressionTimer <= 0) {
+    player.expression = 'neutral';
+  }
+
+  player.blinkTimer -= delta;
+  const blinking = player.blinkTimer < 0.11;
+  if (player.blinkTimer <= 0) player.blinkTimer = 2.4 + (Math.sin(elapsed * 2.19) + 1) * 1.35;
+
+  const parts = player.expressionRig.userData.parts;
+  if (!parts) return;
+  let leftAngle = -0.04;
+  let rightAngle = 0.04;
+  let browY = 0.11;
+  let cheekOpacity = 0;
+  let glintScale = 1;
+  if (player.expression === 'determined' || player.expression === 'focused') {
+    leftAngle = -0.28;
+    rightAngle = 0.28;
+    browY = 0.095;
+    glintScale = 0.72;
+  } else if (player.expression === 'cheerful') {
+    leftAngle = 0.16;
+    rightAngle = -0.16;
+    cheekOpacity = 0.62;
+    glintScale = 1.28;
+  } else if (player.expression === 'curious') {
+    leftAngle = -0.12;
+    rightAngle = -0.3;
+    browY = 0.125;
+  } else if (player.expression === 'worried') {
+    leftAngle = 0.3;
+    rightAngle = -0.3;
+    browY = 0.08;
+    glintScale = 0.62;
+  }
+  parts.brows[0].rotation.z = damp(parts.brows[0].rotation.z, leftAngle, 12, delta);
+  parts.brows[1].rotation.z = damp(parts.brows[1].rotation.z, rightAngle, 12, delta);
+  parts.brows.forEach((brow) => { brow.position.y = damp(brow.position.y, browY, 12, delta); });
+  parts.cheekMaterial.opacity = damp(parts.cheekMaterial.opacity, cheekOpacity, 10, delta);
+  const faceYaw = player.expression === 'curious' ? Math.sin(elapsed * 1.1) * 0.11 : 0;
+  const facePitch = player.expression === 'worried' ? 0.06 : (player.expression === 'cheerful' ? -0.035 : 0);
+  player.expressionRig.rotation.y = dampAngle(player.expressionRig.rotation.y, faceYaw, 10, delta);
+  player.expressionRig.rotation.x = dampAngle(player.expressionRig.rotation.x, facePitch, 10, delta);
+  player.expressionRig.position.y = damp(player.expressionRig.position.y, 1.2 + Math.sin(elapsed * 2.25) * 0.008, 12, delta);
+  parts.glints.forEach((glint, index) => {
+    const pulse = 0.9 + Math.sin(elapsed * 5 + index) * 0.1;
+    glint.scale.set(glintScale * pulse, blinking ? 0.05 : glintScale * pulse, 1);
+  });
+}
 
 function getPlayerForward(target = new THREE.Vector3()) {
   return target.set(
@@ -946,7 +1289,7 @@ function createFootDust() {
 }
 
 function beginPlayerAttack() {
-  if (player.attackCooldown > 0 || player.dashTimer > 0) return;
+  if (player.attackCooldown > 0 || player.dashTimer > 0 || player.rollTimer > 0 || player.heavyTimer > 0 || player.specialTimer > 0) return;
   player.comboStep = player.comboWindow > 0 ? (player.comboStep + 1) % 3 : 0;
   player.attackTimer = 0.42;
   player.attackCooldown = 0.31;
@@ -956,7 +1299,7 @@ function beginPlayerAttack() {
 }
 
 function beginPlayerDash(movement) {
-  if (player.dashCooldown > 0 || player.attackTimer > 0) return;
+  if (player.dashCooldown > 0 || player.attackTimer > 0 || player.rollTimer > 0 || player.heavyTimer > 0 || player.specialTimer > 0) return;
   if (movement.active) player.dashDirection.set(movement.x, 0, movement.z).normalize();
   else getPlayerForward(player.dashDirection);
   player.dashTimer = CONFIG.dashDuration;
@@ -970,10 +1313,53 @@ function beginPlayerDash(movement) {
   });
 }
 
+function beginPlayerRoll(movement) {
+  if (player.rollCooldown > 0 || player.attackTimer > 0 || player.dashTimer > 0 || player.heavyTimer > 0 || player.specialTimer > 0) return;
+  if (movement.active) player.rollDirection.set(movement.x, 0, movement.z).normalize();
+  else getPlayerForward(player.rollDirection);
+  player.rollTimer = CONFIG.rollDuration;
+  player.rollCooldown = CONFIG.rollCooldown;
+  player.invulnerability = Math.max(player.invulnerability, CONFIG.rollDuration + 0.1);
+  audio.play('roll');
+  createFootDust();
+}
+
+function beginPlayerHeavyAttack() {
+  if (player.heavyCooldown > 0 || player.attackTimer > 0 || player.dashTimer > 0 || player.rollTimer > 0 || player.specialTimer > 0) return;
+  player.heavyTimer = CONFIG.heavyDuration;
+  player.heavyCooldown = CONFIG.heavyCooldown;
+  player.heavyConnected = false;
+  player.velocity.multiplyScalar(0.3);
+  audio.play('heavy');
+}
+
+function beginPlayerSpecial() {
+  if (player.specialCharge < 100 || player.specialTimer > 0 || player.rollTimer > 0 || player.dashTimer > 0) return;
+  player.specialTimer = CONFIG.specialDuration;
+  player.specialConnected = false;
+  player.specialCharge = 0;
+  player.attackTimer = 0;
+  player.heavyTimer = 0;
+  player.invulnerability = Math.max(player.invulnerability, CONFIG.specialDuration + 0.2);
+  player.velocity.set(0, 0, 0);
+  audio.play('special');
+  if (dom.specialCutIn) {
+    dom.specialCutIn.classList.remove('active');
+    void dom.specialCutIn.offsetWidth;
+    dom.specialCutIn.classList.add('active');
+    dom.specialCutIn.setAttribute('aria-hidden', 'false');
+    window.setTimeout(() => {
+      dom.specialCutIn?.classList.remove('active');
+      dom.specialCutIn?.setAttribute('aria-hidden', 'true');
+    }, 1280);
+  }
+}
+
 function updatePlayer(delta, elapsed) {
   if (!player.ready) return;
   if (!game.active) {
-    player.animator.update(delta, 'idle', 0, 0, 0, player.comboStep, 0);
+    updateFeniExpression(delta, 'idle', elapsed);
+    player.animator.update(delta, 'idle', 0, 0, 0, player.comboStep, 0, player.expression, 0);
     return;
   }
 
@@ -981,28 +1367,63 @@ function updatePlayer(delta, elapsed) {
   player.attackCooldown = Math.max(0, player.attackCooldown - delta);
   player.comboWindow = Math.max(0, player.comboWindow - delta);
   player.dashCooldown = Math.max(0, player.dashCooldown - delta);
+  player.rollCooldown = Math.max(0, player.rollCooldown - delta);
+  player.heavyCooldown = Math.max(0, player.heavyCooldown - delta);
   player.landedPulse = Math.max(0, player.landedPulse - delta * 4.8);
 
   const movement = input.getMovement();
+  if (movement.active) {
+    const rawX = movement.x;
+    const rawZ = movement.z;
+    const cosine = Math.cos(cameraRig.orbitYaw);
+    const sine = Math.sin(cameraRig.orbitYaw);
+    movement.x = rawX * cosine + rawZ * sine;
+    movement.z = -rawX * sine + rawZ * cosine;
+  }
   if (input.consumeAttack()) beginPlayerAttack();
   if (input.consumeDash()) beginPlayerDash(movement);
+  if (input.consumeRoll()) beginPlayerRoll(movement);
+  if (input.consumeHeavy()) beginPlayerHeavyAttack();
+  if (input.consumeSpecial()) beginPlayerSpecial();
+  if (input.consumeCamera()) cameraRig.cycleMode();
   if (input.consumeJump()) player.jumpBuffer = 0.13;
   else player.jumpBuffer = Math.max(0, player.jumpBuffer - delta);
 
   if (player.grounded) player.coyoteTimer = 0.13;
   else player.coyoteTimer = Math.max(0, player.coyoteTimer - delta);
 
-  if (player.jumpBuffer > 0 && player.coyoteTimer > 0 && player.dashTimer <= 0) {
-    player.verticalVelocity = CONFIG.jumpSpeed;
-    player.grounded = false;
-    player.coyoteTimer = 0;
-    player.jumpBuffer = 0;
-    audio.play('jump');
-    createFootDust();
+  if (player.jumpBuffer > 0 && player.dashTimer <= 0 && player.rollTimer <= 0 && player.specialTimer <= 0) {
+    const canGroundJump = player.coyoteTimer > 0 && player.jumpsUsed === 0;
+    const canDoubleJump = !player.grounded && player.jumpsUsed < CONFIG.maxJumps;
+    if (canGroundJump || canDoubleJump) {
+      const doubleJump = !canGroundJump;
+      player.verticalVelocity = doubleJump ? CONFIG.doubleJumpSpeed : CONFIG.jumpSpeed;
+      player.grounded = false;
+      player.coyoteTimer = 0;
+      player.jumpBuffer = 0;
+      player.jumpsUsed = doubleJump ? CONFIG.maxJumps : 1;
+      audio.play(doubleJump ? 'doubleJump' : 'jump');
+      if (doubleJump) {
+        spawnShockwave(player.group.position.clone().add(new THREE.Vector3(0, 0.48, 0)), 0xff713d, 0.65);
+        particles.burst(player.group.position.clone().add(new THREE.Vector3(0, 0.48, 0)), 0xff9d45, 22, 3.1, {
+          upward: 0.4,
+          gravity: 2.4,
+          life: 0.55,
+        });
+      } else {
+        createFootDust();
+      }
+    }
   }
 
   let moveAmount = movement.strength;
-  if (player.dashTimer > 0) {
+  if (player.rollTimer > 0) {
+    player.rollTimer = Math.max(0, player.rollTimer - delta);
+    tempMove.copy(player.rollDirection).multiplyScalar(CONFIG.rollSpeed);
+    player.velocity.x = tempMove.x;
+    player.velocity.z = tempMove.z;
+    moveAmount = 1;
+  } else if (player.dashTimer > 0) {
     player.dashTimer = Math.max(0, player.dashTimer - delta);
     tempMove.copy(player.dashDirection).multiplyScalar(CONFIG.dashSpeed);
     player.velocity.x = tempMove.x;
@@ -1012,7 +1433,8 @@ function updatePlayer(delta, elapsed) {
     const requestedSpeed = movement.strength < 0.68
       ? CONFIG.walkSpeed * THREE.MathUtils.mapLinear(movement.strength, 0, 0.68, 0, 1)
       : THREE.MathUtils.lerp(CONFIG.walkSpeed, CONFIG.runSpeed, (movement.strength - 0.68) / 0.32);
-    const speedPenalty = player.attackTimer > 0 ? 0.58 : 1;
+    const actionLocked = player.specialTimer > 0;
+    const speedPenalty = player.attackTimer > 0 ? 0.58 : (player.heavyTimer > 0 ? 0.28 : (actionLocked ? 0 : 1));
     const targetVelocityX = movement.active ? movement.x * requestedSpeed * speedPenalty : 0;
     const targetVelocityZ = movement.active ? movement.z * requestedSpeed * speedPenalty : 0;
     player.velocity.x = damp(player.velocity.x, targetVelocityX, player.grounded ? 13 : 4.8, delta);
@@ -1045,6 +1467,7 @@ function updatePlayer(delta, elapsed) {
     }
     player.verticalVelocity = 0;
     player.grounded = true;
+    player.jumpsUsed = 0;
   } else {
     player.grounded = false;
   }
@@ -1061,6 +1484,47 @@ function updatePlayer(delta, elapsed) {
     }
   }
 
+  if (player.heavyTimer > 0) {
+    player.heavyTimer = Math.max(0, player.heavyTimer - delta);
+    const heavyProgress = 1 - player.heavyTimer / CONFIG.heavyDuration;
+    if (!player.heavyConnected && heavyProgress > 0.43) {
+      player.heavyConnected = true;
+      const forward = getPlayerForward(new THREE.Vector3());
+      const impact = player.group.position.clone().addScaledVector(forward, 1.25);
+      spawnShockwave(impact, 0xff6335, 1.15);
+      particles.burst(impact.clone().add(new THREE.Vector3(0, 0.55, 0)), 0xff783a, 30, 5.2, {
+        upward: 2.2,
+        gravity: 6,
+        life: 0.68,
+      });
+      damageEnemiesInArc(46, 2.55, -0.05, 2.7);
+      player.velocity.addScaledVector(forward, 2.6);
+      cameraRig.shake = Math.max(cameraRig.shake, 0.28);
+    }
+  }
+
+  if (player.specialTimer > 0) {
+    player.specialTimer = Math.max(0, player.specialTimer - delta);
+    const specialProgress = 1 - player.specialTimer / CONFIG.specialDuration;
+    if (!player.specialConnected && specialProgress > 0.55) {
+      player.specialConnected = true;
+      spawnCrimsonBurst(player.group.position);
+      damageEnemiesInRadius(92, 8.5, 3.8);
+      player.health = Math.min(CONFIG.playerMaxHealth, player.health + 18);
+      cameraRig.shake = Math.max(cameraRig.shake, 0.62);
+      showObjectiveToast('PHOENIX DRIVE！ 赤炎衝撃波！！');
+    }
+  }
+
+  if (player.rollTimer > 0) {
+    const rollProgress = 1 - player.rollTimer / CONFIG.rollDuration;
+    player.visualRoot.rotation.x = rollProgress * Math.PI * 2;
+    player.visualRoot.position.y = Math.sin(rollProgress * Math.PI) * 0.34;
+  } else {
+    player.visualRoot.rotation.x = dampAngle(player.visualRoot.rotation.x, 0, 18, delta);
+    player.visualRoot.position.y = damp(player.visualRoot.position.y, 0, 18, delta);
+  }
+
   if (player.grounded && horizontalSpeed > 1.2) {
     player.footstepTimer -= delta;
     if (player.footstepTimer <= 0) {
@@ -1072,7 +1536,10 @@ function updatePlayer(delta, elapsed) {
   }
 
   let state = 'idle';
-  if (player.attackTimer > 0) state = 'attack';
+  if (player.specialTimer > 0) state = 'special';
+  else if (player.heavyTimer > 0) state = 'heavy';
+  else if (player.attackTimer > 0) state = 'attack';
+  else if (player.rollTimer > 0) state = 'roll';
   else if (player.dashTimer > 0) state = 'dash';
   else if (!player.grounded) state = player.verticalVelocity >= 0 ? 'jump' : 'fall';
   else if (horizontalSpeed > 3.35) state = 'run';
@@ -1080,6 +1547,10 @@ function updatePlayer(delta, elapsed) {
   player.state = state;
 
   const attackProgress = player.attackTimer > 0 ? 1 - player.attackTimer / 0.42 : 0;
+  const actionProgress = player.specialTimer > 0
+    ? 1 - player.specialTimer / CONFIG.specialDuration
+    : (player.heavyTimer > 0 ? 1 - player.heavyTimer / CONFIG.heavyDuration : 0);
+  updateFeniExpression(delta, state, elapsed);
   player.animator.update(
     delta,
     state,
@@ -1088,6 +1559,8 @@ function updatePlayer(delta, elapsed) {
     attackProgress,
     player.comboStep,
     player.landedPulse,
+    player.expression,
+    actionProgress,
   );
 
   if (player.model) {
@@ -1096,7 +1569,7 @@ function updatePlayer(delta, elapsed) {
 }
 
 function takePlayerDamage(amount, sourcePosition, knockback = 4.5) {
-  if (!game.active || player.invulnerability > 0 || player.dashTimer > 0) return false;
+  if (!game.active || player.invulnerability > 0 || player.dashTimer > 0 || player.rollTimer > 0 || player.specialTimer > 0) return false;
   player.health = Math.max(0, player.health - amount);
   player.invulnerability = 0.85;
   const away = tempMove.copy(player.group.position).sub(sourcePosition);
@@ -1454,7 +1927,7 @@ class Enemy {
     if (this === bossEnemy) updateBossHud();
   }
 
-  takeDamage(amount, attackOrigin) {
+  takeDamage(amount, attackOrigin, knockbackMultiplier = 1) {
     if (this.dead) return false;
     this.health = Math.max(0, this.health - amount);
     this.aggro = true;
@@ -1466,7 +1939,8 @@ class Enemy {
     if (away.lengthSq() > 0.001) {
       away.normalize();
       const resistance = this.type === 'boss' ? 0.35 : 1;
-      this.model.position.addScaledVector(away, 0.42 * resistance);
+      this.model.position.addScaledVector(away, 0.42 * resistance * knockbackMultiplier);
+      this.velocity.addScaledVector(away, 2.2 * resistance * Math.max(1, knockbackMultiplier));
     }
     const hitPosition = this.model.position.clone().add(new THREE.Vector3(0, this.type === 'boss' ? 1.2 : 0.72, 0));
     particles.burst(hitPosition, this.type === 'boss' ? 0xc163ff : 0xff385c, this.type === 'boss' ? 20 : 12, 3.3, {
@@ -1485,6 +1959,7 @@ class Enemy {
     this.dead = true;
     this.deathTimer = this.type === 'boss' ? 1.25 : 0.72;
     game.defeated += 1;
+    player.specialCharge = Math.min(100, player.specialCharge + (this.type === 'boss' ? 45 : 22));
     audio.play('enemyDown');
     spawnShockwave(this.model.position, this.type === 'boss' ? 0x8c5fff : 0xff214f, this.type === 'boss' ? 2.2 : 0.9);
     const burstPosition = this.model.position.clone().add(new THREE.Vector3(0, this.type === 'boss' ? 1.1 : 0.6, 0));
@@ -1499,7 +1974,7 @@ class Enemy {
   }
 }
 
-function damageEnemiesInArc(damage, range, minimumDot) {
+function damageEnemiesInArc(damage, range, minimumDot, knockbackMultiplier = 1) {
   const forward = getPlayerForward(new THREE.Vector3());
   let connected = false;
   for (const enemy of enemies) {
@@ -1510,10 +1985,25 @@ function damageEnemiesInArc(damage, range, minimumDot) {
     if (distance > range + enemy.radius || distance < 0.001) continue;
     toEnemy.divideScalar(distance);
     if (forward.dot(toEnemy) < minimumDot) continue;
-    enemy.takeDamage(damage, player.group.position);
+    enemy.takeDamage(damage, player.group.position, knockbackMultiplier);
     connected = true;
   }
-  if (connected) player.comboWindow = Math.max(player.comboWindow, 0.74);
+  if (connected) {
+    player.comboWindow = Math.max(player.comboWindow, 0.74);
+    player.specialCharge = Math.min(100, player.specialCharge + damage * 0.22);
+  }
+}
+
+function damageEnemiesInRadius(damage, range, knockbackMultiplier = 1) {
+  let hits = 0;
+  for (const enemy of enemies) {
+    if (enemy.dead || enemy.removed) continue;
+    const distance = enemy.model.position.distanceTo(player.group.position);
+    if (distance > range + enemy.radius) continue;
+    enemy.takeDamage(damage, player.group.position, knockbackMultiplier);
+    hits += 1;
+  }
+  return hits;
 }
 
 function createPortalModel() {
@@ -1645,6 +2135,7 @@ function updateStageActors(delta, elapsed) {
       core.userData.collected = true;
       core.visible = false;
       game.cores += 1;
+      player.specialCharge = Math.min(100, player.specialCharge + 18);
       audio.play('core');
       particles.burst(core.position, 0x72fbff, 28, 3.8, {
         upward: 2.5,
@@ -1765,6 +2256,9 @@ function updateHud() {
     dom.enemyText.textContent = String(alive);
   }
   if (dom.timerText) dom.timerText.textContent = formatTime(game.elapsed);
+  if (dom.specialFill) dom.specialFill.style.width = `${THREE.MathUtils.clamp(player.specialCharge, 0, 100)}%`;
+  if (dom.specialText) dom.specialText.textContent = player.specialCharge >= 100 ? 'READY' : `${Math.floor(player.specialCharge)}%`;
+  dom.specialButton?.classList.toggle('ready', player.specialCharge >= 100);
   updateBossHud();
 }
 
@@ -1777,6 +2271,7 @@ function resetPlayer() {
   player.grounded = true;
   player.coyoteTimer = 0;
   player.jumpBuffer = 0;
+  player.jumpsUsed = 0;
   player.health = CONFIG.playerMaxHealth;
   player.invulnerability = 0;
   player.attackTimer = 0;
@@ -1786,9 +2281,25 @@ function resetPlayer() {
   player.comboWindow = 0;
   player.dashTimer = 0;
   player.dashCooldown = 0;
+  player.rollTimer = 0;
+  player.rollCooldown = 0;
+  player.rollDirection.set(0, 0, -1);
+  player.heavyTimer = 0;
+  player.heavyCooldown = 0;
+  player.heavyConnected = false;
+  player.specialTimer = 0;
+  player.specialConnected = false;
+  player.specialCharge = 100;
+  player.expression = 'neutral';
+  player.expressionTimer = 1.4;
+  player.blinkTimer = 1.8;
   player.landedPulse = 0;
   player.footstepTimer = 0;
   player.state = 'idle';
+  player.visualRoot.position.set(0, 0, 0);
+  player.visualRoot.rotation.set(0, 0, 0);
+  dom.specialCutIn?.classList.remove('active');
+  dom.specialCutIn?.setAttribute('aria-hidden', 'true');
   if (player.model) player.model.visible = true;
 }
 
@@ -1849,12 +2360,29 @@ const cameraRig = {
   look: new THREE.Vector3(),
   shake: 0,
   titleAngle: 0,
+  orbitYaw: 0,
+  orbitPitch: 0,
+  modeIndex: 0,
+  modes: [
+    { name: 'FOLLOW', distance: 7.4, height: 3.6, lookHeight: 1.05, fov: 55 },
+    { name: 'CLOSE', distance: 4.7, height: 2.45, lookHeight: 1.0, fov: 58 },
+    { name: 'WIDE', distance: 10.8, height: 5.25, lookHeight: 1.15, fov: 60 },
+  ],
+
+  cycleMode() {
+    this.modeIndex = (this.modeIndex + 1) % this.modes.length;
+    const name = this.modes[this.modeIndex].name;
+    if (dom.cameraButton) dom.cameraButton.textContent = `CAM：${name}`;
+    if (dom.cameraTouchButton) dom.cameraTouchButton.textContent = name === 'FOLLOW' ? 'CAM' : name;
+    showObjectiveToast(`カメラ：${name}`);
+  },
 
   snapToPlayer() {
+    const mode = this.modes[this.modeIndex];
     this.ideal.set(
-      player.group.position.x,
-      player.group.position.y + CONFIG.cameraHeight,
-      player.group.position.z + CONFIG.cameraDistance,
+      player.group.position.x + Math.sin(this.orbitYaw) * mode.distance,
+      player.group.position.y + mode.height,
+      player.group.position.z + Math.cos(this.orbitYaw) * mode.distance,
     );
     camera.position.copy(this.ideal);
     this.look.copy(player.group.position).add(new THREE.Vector3(0, CONFIG.cameraLookHeight, -0.8));
@@ -1864,22 +2392,26 @@ const cameraRig = {
   update(delta, elapsed) {
     if (!player.ready) return;
     if (game.active) {
+      const mode = this.modes[this.modeIndex];
+      this.orbitYaw += input.getCameraTurn() * delta * 1.55;
       const speed = Math.hypot(player.velocity.x, player.velocity.z);
       const lookAheadX = player.velocity.x * 0.22;
       const lookAheadZ = THREE.MathUtils.clamp(player.velocity.z * 0.2, -1.05, 0.7);
+      const dashDistance = player.dashTimer > 0 ? 0.75 : 0;
+      const distance = mode.distance + dashDistance;
       this.ideal.set(
-        player.group.position.x + lookAheadX * 0.35,
-        player.group.position.y + CONFIG.cameraHeight + (player.dashTimer > 0 ? 0.12 : 0),
-        player.group.position.z + CONFIG.cameraDistance + (player.dashTimer > 0 ? 0.75 : 0),
+        player.group.position.x + lookAheadX * 0.35 + Math.sin(this.orbitYaw) * distance,
+        player.group.position.y + mode.height + this.orbitPitch + (player.dashTimer > 0 ? 0.12 : 0),
+        player.group.position.z + Math.cos(this.orbitYaw) * distance,
       );
       const cameraBlend = 1 - Math.exp(-6.8 * delta);
       camera.position.lerp(this.ideal, cameraBlend);
       this.look.set(
         player.group.position.x + lookAheadX,
-        player.group.position.y + CONFIG.cameraLookHeight,
+        player.group.position.y + mode.lookHeight,
         player.group.position.z - 0.75 + lookAheadZ,
       );
-      const desiredFov = 55 + THREE.MathUtils.clamp((speed - 3.5) * 1.35, 0, 5) + (player.dashTimer > 0 ? 4 : 0);
+      const desiredFov = mode.fov + THREE.MathUtils.clamp((speed - 3.5) * 1.15, 0, 5) + (player.dashTimer > 0 ? 4 : 0) + (player.specialTimer > 0 ? 6 : 0);
       camera.fov = damp(camera.fov, desiredFov, 7, delta);
     } else {
       this.titleAngle += delta * 0.12;
@@ -1906,6 +2438,31 @@ const cameraRig = {
   },
 };
 
+let cameraPointerId = null;
+let cameraPointerX = 0;
+let cameraPointerY = 0;
+dom.canvas?.addEventListener('pointerdown', (event) => {
+  if (!game.active || event.button > 0) return;
+  cameraPointerId = event.pointerId;
+  cameraPointerX = event.clientX;
+  cameraPointerY = event.clientY;
+  dom.canvas.setPointerCapture?.(event.pointerId);
+});
+dom.canvas?.addEventListener('pointermove', (event) => {
+  if (event.pointerId !== cameraPointerId) return;
+  const dx = event.clientX - cameraPointerX;
+  const dy = event.clientY - cameraPointerY;
+  cameraPointerX = event.clientX;
+  cameraPointerY = event.clientY;
+  cameraRig.orbitYaw -= dx * 0.006;
+  cameraRig.orbitPitch = THREE.MathUtils.clamp(cameraRig.orbitPitch + dy * 0.008, -0.7, 1.5);
+});
+const releaseCameraPointer = (event) => {
+  if (event.pointerId === cameraPointerId) cameraPointerId = null;
+};
+dom.canvas?.addEventListener('pointerup', releaseCameraPointer);
+dom.canvas?.addEventListener('pointercancel', releaseCameraPointer);
+
 function finishLoading(model, sourceLabel) {
   model.traverse((object) => {
     if (!object.isMesh) return;
@@ -1917,7 +2474,7 @@ function finishLoading(model, sourceLabel) {
     }
   });
   model.position.set(0, 0, 0);
-  player.group.add(model);
+  player.visualRoot.add(model);
   player.model = model;
   player.animator = new FeniAnimator(model);
   player.ready = true;
@@ -2027,6 +2584,9 @@ window.__repairHero = {
     cores: game.cores,
     enemiesAlive: enemies.filter((enemy) => !enemy.dead).length,
     objective: game.objectiveKey,
+    jumpsUsed: player.jumpsUsed,
+    specialCharge: player.specialCharge,
+    cameraMode: cameraRig.modes[cameraRig.modeIndex].name,
   }),
 };
 

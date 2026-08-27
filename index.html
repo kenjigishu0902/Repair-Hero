@@ -28,13 +28,13 @@
       <div class="title-panel">
         <p class="eyebrow">IBRING GAME PROJECT</p>
         <h1><span>REPAIR</span> HERO</h1>
-        <p class="title-copy">バグに侵食されたリペアワールドを、フェニちゃんの力で修復せよ。</p>
+        <p class="title-copy">大自然を侵食する機械バグ軍団を、フェニちゃんの新アクションで跳ね飛ばせ。</p>
 
         <div class="mission-card">
           <div class="mission-number">STAGE 01</div>
           <div>
-            <strong>侵食されたリペアグリッド</strong>
-            <span>コアを5個回収し、ダークバグ・ガーディアンを撃破する</span>
+            <strong>フェニ・ワイルドグリーン</strong>
+            <span>森と渓流を進み、コアを5個回収してアビス・ガーディアンを撃破する</span>
           </div>
         </div>
 
@@ -44,9 +44,13 @@
 
         <div class="desktop-controls" aria-label="操作説明">
           <span><b>WASD / 矢印</b> 移動</span>
-          <span><b>SPACE</b> ジャンプ</span>
+          <span><b>SPACE</b> 二段ジャンプ</span>
           <span><b>J / X</b> 攻撃</span>
+          <span><b>F</b> 吹き飛ばし</span>
           <span><b>K / SHIFT</b> ダッシュ</span>
+          <span><b>L / C</b> 回避ロール</span>
+          <span><b>R</b> 必殺技</span>
+          <span><b>V / Q / E</b> カメラ</span>
         </div>
         <p class="touch-copy">スマホは画面のスティックとボタンで操作できます</p>
       </div>
@@ -77,11 +81,17 @@
       <div id="objective-pill"><span>MISSION</span><b id="objective-text">リペアコアを集めろ　0/5</b></div>
 
       <div id="boss-hud">
-        <div class="boss-heading"><span id="boss-name">DARK BUG GUARDIAN</span><small>BOSS</small></div>
+        <div class="boss-heading"><span id="boss-name">ABYSS REPAIR TYRANT</span><small>BOSS</small></div>
         <div class="boss-bar-shell"><div id="boss-bar-fill"></div></div>
       </div>
 
-      <div class="keyboard-hint">J：攻撃　SPACE：ジャンプ　SHIFT：ダッシュ</div>
+      <div id="special-gauge" class="hud-panel">
+        <div class="special-label"><span>PHOENIX DRIVE</span><b id="special-text">READY</b></div>
+        <div class="special-shell"><div id="special-fill"></div></div>
+      </div>
+
+      <button id="camera-button" class="camera-button" type="button" aria-label="カメラ視点切替">CAM：FOLLOW</button>
+      <div class="keyboard-hint">J：攻撃　F：吹き飛ばし　R：必殺　SPACE：二段ジャンプ　L：回避　V：視点</div>
     </section>
 
     <div id="objective-toast" role="status">リペアコアを5個集めろ！</div>
@@ -91,9 +101,22 @@
         <div id="joystick-base"><div id="joystick-knob"></div></div>
       </div>
       <div class="touch-action-cluster">
+        <button id="camera-touch-button" class="touch-button camera-touch-button" type="button" aria-label="カメラ視点切替">CAM</button>
+        <button id="special-button" class="touch-button special-button" type="button" aria-label="必殺技">必殺</button>
+        <button id="roll-button" class="touch-button roll-button" type="button" aria-label="回避ロール">ROLL</button>
+        <button id="heavy-button" class="touch-button heavy-button" type="button" aria-label="吹き飛ばし攻撃">BLOW</button>
         <button id="dash-button" class="touch-button dash-button" type="button" aria-label="ダッシュ">DASH</button>
         <button id="attack-button" class="touch-button attack-button" type="button" aria-label="攻撃">ATTACK</button>
         <button id="jump-button" class="touch-button jump-button" type="button" aria-label="ジャンプ">JUMP</button>
+      </div>
+    </section>
+
+    <section id="special-cut-in" aria-live="assertive" aria-hidden="true">
+      <div class="cut-in-speed-lines"></div>
+      <div class="cut-in-feni-mark" aria-hidden="true"><span>F</span></div>
+      <div class="cut-in-copy">
+        <small>PHOENIX DRIVE</small>
+        <strong>おいどんは<br />諦めない！！</strong>
       </div>
     </section>
 

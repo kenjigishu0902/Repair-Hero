@@ -30,6 +30,20 @@ const shared = {
     roughness: 0.4,
     metalness: 0.35,
   }),
+  crimsonGlow: new THREE.MeshStandardMaterial({
+    color: 0xff203f,
+    emissive: 0xd0002c,
+    emissiveIntensity: 2.6,
+    roughness: 0.2,
+    metalness: 0.45,
+  }),
+  abyss: new THREE.MeshStandardMaterial({
+    color: 0x090b16,
+    emissive: 0x160026,
+    emissiveIntensity: 0.65,
+    roughness: 0.34,
+    metalness: 0.78,
+  }),
 };
 
 const geometry = {
@@ -56,6 +70,16 @@ const geometry = {
   antenna: new THREE.ConeGeometry(0.12, 0.45, 5),
   core: new THREE.OctahedronGeometry(0.25, 0),
   coreRing: new THREE.TorusGeometry(0.42, 0.035, 8, 24),
+  armorPlate: new THREE.BoxGeometry(0.72, 0.12, 0.48),
+  jaw: new THREE.BoxGeometry(0.56, 0.16, 0.32),
+  fang: new THREE.ConeGeometry(0.075, 0.28, 5),
+  blade: new THREE.ConeGeometry(0.16, 0.86, 4),
+  rotor: new THREE.TorusGeometry(0.31, 0.055, 7, 18),
+  cannon: new THREE.CylinderGeometry(0.11, 0.16, 0.62, 8),
+  horn: new THREE.ConeGeometry(0.16, 0.72, 6),
+  swordBlade: new THREE.BoxGeometry(0.15, 1.65, 0.38),
+  swordGuard: new THREE.BoxGeometry(0.75, 0.12, 0.18),
+  shoulderBlade: new THREE.ConeGeometry(0.2, 0.85, 5),
 };
 
 function cloneMaterial(material) {
@@ -107,6 +131,34 @@ export function createCrawlerModel() {
   const rightEye = addMesh(group, geometry.smallEye, eyeMaterial, {
     position: [0.17, 0.64, 0.55],
   });
+  const jaw = addMesh(group, geometry.jaw, cloneMaterial(shared.abyss), {
+    position: [0, 0.43, 0.57],
+    rotation: [-0.12, 0, 0],
+  });
+  for (const x of [-0.19, -0.06, 0.06, 0.19]) {
+    addMesh(jaw, geometry.fang, shared.crimsonGlow, {
+      position: [x, -0.11, 0.13],
+      rotation: [Math.PI, 0, 0],
+      scale: [0.72, 0.72, 0.72],
+    });
+  }
+  const armor = [];
+  for (const z of [-0.28, 0.02, 0.31]) {
+    armor.push(addMesh(group, geometry.armorPlate, z === 0.02 ? shared.red : shared.steel, {
+      position: [0, 0.9 - Math.abs(z) * 0.35, z - 0.11],
+      rotation: [z * 0.24, 0, 0],
+      scale: [0.92 - Math.abs(z) * 0.3, 1, 0.9],
+    }));
+  }
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.68, -0.54);
+  tail.rotation.x = -0.62;
+  group.add(tail);
+  addMesh(tail, geometry.blade, shared.violet, {
+    position: [0, 0.38, -0.12],
+    rotation: [Math.PI / 2, 0, 0],
+    scale: [0.78, 1.2, 0.78],
+  });
 
   const legs = [];
   for (let side = -1; side <= 1; side += 2) {
@@ -140,6 +192,9 @@ export function createCrawlerModel() {
     eyes: [leftEye, rightEye],
     eyeMaterial,
     legs,
+    jaw,
+    armor,
+    tail,
   };
   group.userData.baseScale = 1;
   return group;
@@ -165,6 +220,8 @@ export function createDroneModel() {
     scale: [1.25, 0.72, 0.48],
   });
   const wings = [];
+  const rotors = [];
+  const cannons = [];
   for (const side of [-1, 1]) {
     const wing = new THREE.Group();
     wing.position.set(side * 0.58, 1.05, -0.02);
@@ -177,7 +234,22 @@ export function createDroneModel() {
       position: [side * 0.54, 0, -0.04],
       rotation: [0, 0, side * -Math.PI / 2],
     });
+    const rotor = addMesh(wing, geometry.rotor, shared.crimsonGlow, {
+      position: [side * 0.37, 0.08, -0.03],
+      rotation: [Math.PI / 2, 0, 0],
+    });
+    const cannon = addMesh(wing, geometry.cannon, shared.abyss, {
+      position: [side * 0.2, -0.16, 0.24],
+      rotation: [Math.PI / 2, 0, 0],
+    });
+    addMesh(wing, geometry.blade, shared.violet, {
+      position: [side * 0.7, 0.02, -0.06],
+      rotation: [0, 0, side * -Math.PI / 2],
+      scale: [0.7, 0.72, 0.7],
+    });
     wings.push(wing);
+    rotors.push(rotor);
+    cannons.push(cannon);
   }
   addMesh(group, geometry.antenna, shared.red, {
     position: [0, 1.67, -0.05],
@@ -189,6 +261,8 @@ export function createDroneModel() {
     eye,
     eyeMaterial,
     wings,
+    rotors,
+    cannons,
   };
   return group;
 }
@@ -231,13 +305,25 @@ export function createGuardianModel() {
     position: [0.28, 0.55, 0],
     rotation: [0, 0, 0.22],
   });
+  for (const side of [-1, 1]) {
+    addMesh(head, geometry.horn, shared.abyss, {
+      position: [side * 0.42, 0.35, -0.08],
+      rotation: [0.08, 0, side * -0.52],
+      scale: [1, 1.18, 1],
+    });
+  }
 
   const arms = [];
+  const shoulderBlades = [];
   for (const side of [-1, 1]) {
     addMesh(group, geometry.bossShoulder, violetMaterial, {
       position: [side * 0.82, 1.66, -0.01],
       scale: [1.18, 0.88, 1],
     });
+    shoulderBlades.push(addMesh(group, geometry.shoulderBlade, redMaterial, {
+      position: [side * 1.02, 2.02, -0.05],
+      rotation: [0, 0, side * -0.48],
+    }));
     const arm = new THREE.Group();
     arm.position.set(side * 0.82, 1.55, 0);
     group.add(arm);
@@ -250,6 +336,31 @@ export function createGuardianModel() {
       scale: [1.08, 1, 1.08],
     });
     arms.push(arm);
+  }
+
+  const sword = new THREE.Group();
+  sword.position.set(0.26, -1.04, 0.12);
+  sword.rotation.set(-0.14, 0, -0.18);
+  arms[1].add(sword);
+  addMesh(sword, geometry.swordBlade, shared.crimsonGlow, {
+    position: [0, -0.8, 0],
+    rotation: [0, 0, 0],
+  });
+  addMesh(sword, geometry.swordGuard, shared.steel, {
+    position: [0, 0.05, 0],
+  });
+  addMesh(sword, geometry.cannon, shared.abyss, {
+    position: [0, 0.35, 0],
+  });
+
+  const backBlades = [];
+  for (const side of [-1, 1]) {
+    const blade = addMesh(group, geometry.blade, violetMaterial, {
+      position: [side * 0.48, 1.55, -0.62],
+      rotation: [-0.42, 0, side * 0.4],
+      scale: [1.2, 1.6, 1.2],
+    });
+    backBlades.push(blade);
   }
 
   const legs = [];
@@ -275,6 +386,9 @@ export function createGuardianModel() {
     eyeMaterial,
     arms,
     legs,
+    sword,
+    shoulderBlades,
+    backBlades,
   };
   return group;
 }
@@ -320,6 +434,11 @@ export function animateEnemyModel(enemy, elapsed, moveAmount, telegraphAmount = 
     parts.legs.forEach((leg, index) => {
       leg.rotation.z = Math.sin(gait + index * 1.7) * 0.3 * moveAmount;
     });
+    parts.jaw.rotation.x = -0.12 + Math.sin(elapsed * 3.5) * 0.035 + telegraphAmount * 0.28;
+    parts.tail.rotation.y = Math.sin(elapsed * 4.2 + enemy.seed) * 0.38;
+    parts.armor.forEach((plate, index) => {
+      plate.rotation.z = Math.sin(elapsed * 2.4 + index) * 0.018;
+    });
     parts.eyeMaterial.emissiveIntensity = 2.1 + telegraphAmount * 4;
   } else if (enemy.type === 'drone') {
     enemy.model.position.y = Math.sin(elapsed * 3.1 + enemy.seed) * 0.12;
@@ -327,6 +446,12 @@ export function animateEnemyModel(enemy, elapsed, moveAmount, telegraphAmount = 
     parts.body.rotation.y += 0.45 * enemy.lastDelta;
     parts.wings.forEach((wing, index) => {
       wing.rotation.z = Math.sin(elapsed * 9 + index * Math.PI) * 0.16;
+    });
+    parts.rotors.forEach((rotor, index) => {
+      rotor.rotation.z += (6 + index * 0.7 + telegraphAmount * 8) * enemy.lastDelta;
+    });
+    parts.cannons.forEach((cannon) => {
+      cannon.scale.setScalar(1 + telegraphAmount * 0.24);
     });
     parts.eyeMaterial.emissiveIntensity = 2.3 + telegraphAmount * 5;
   } else if (enemy.type === 'boss') {
@@ -341,6 +466,13 @@ export function animateEnemyModel(enemy, elapsed, moveAmount, telegraphAmount = 
     });
     parts.legs.forEach((leg, index) => {
       leg.rotation.x = Math.sin(gait + index * Math.PI) * 0.35 * moveAmount;
+    });
+    parts.sword.rotation.z = -0.18 - telegraphAmount * 0.82 + Math.sin(elapsed * 1.7) * 0.04;
+    parts.shoulderBlades.forEach((blade, index) => {
+      blade.rotation.y = Math.sin(elapsed * 2.1 + index * Math.PI) * 0.13;
+    });
+    parts.backBlades.forEach((blade, index) => {
+      blade.rotation.z = (index === 0 ? -0.4 : 0.4) + Math.sin(elapsed * 1.8 + index) * 0.08;
     });
     parts.eyeMaterial.emissiveIntensity = 2.4 + telegraphAmount * 5;
   }

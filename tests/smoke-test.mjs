@@ -32,6 +32,7 @@ class ElementStub {
   }
   getBoundingClientRect() { return { left: 0, top: 0, width: 140, height: 140 }; }
   setPointerCapture() {}
+  setAttribute() {}
   getContext() {
     return {
       fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {},
@@ -47,6 +48,8 @@ const elementIds = [
   'boss-bar-fill', 'boss-name', 'damage-flash', 'game-over-screen', 'clear-screen',
   'clear-time', 'clear-defeated', 'retry-button', 'replay-button', 'joystick-zone',
   'joystick-base', 'joystick-knob', 'jump-button', 'attack-button', 'dash-button',
+  'roll-button', 'heavy-button', 'special-button', 'camera-button', 'camera-touch-button',
+  'special-gauge', 'special-fill', 'special-text', 'special-cut-in',
 ];
 const elements = new Map(elementIds.map((id) => [id, new ElementStub(id)]));
 const documentListeners = {};
@@ -124,7 +127,11 @@ source = source
   .replace('renderer = new THREE.WebGLRenderer({', 'renderer = new window.__TestRenderer({')
   .replace('const loader = new GLTFLoader();', 'const loader = new window.__TestLoader();');
 
-await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+try {
+  await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+} catch (error) {
+  throw new Error(`Game module failed during smoke setup: ${error?.message || error}`);
+}
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -149,6 +156,40 @@ const api = windowStub.__repairHero;
 assert(api?.getState().playerReady, 'Player model did not load');
 elements.get('start-button').dispatch('click');
 assert(api.getState().active, 'Game did not start');
+
+elements.get('camera-button').dispatch('click');
+step(1);
+assert(api.getState().cameraMode === 'CLOSE', 'Camera mode did not change');
+
+pressKey('Space');
+step(2);
+pressKey('Space');
+step(2);
+assert(api.player.jumpsUsed === 2, 'Double jump did not consume the second jump');
+api.player.group.position.y = 0;
+api.player.verticalVelocity = 0;
+api.player.grounded = true;
+step(1);
+
+pressKey('KeyL');
+step(2);
+assert(api.player.rollTimer > 0, 'Dodge roll did not start');
+step(34);
+
+pressKey('KeyF');
+step(2);
+assert(api.player.heavyTimer > 0, 'Knockback attack did not start');
+step(48);
+
+pressKey('KeyK');
+step(2);
+assert(api.player.dashTimer > 0, 'Dash did not start');
+step(18);
+
+pressKey('KeyR');
+step(2);
+assert(api.player.specialCharge === 0, 'Phoenix Drive did not consume its gauge');
+step(110);
 
 api.player.invulnerability = 999;
 const corePositions = [[4.1, -7.5], [-5.6, -18.4], [5.8, -29.2], [-3.6, -43.6], [3.8, -54.2]];
